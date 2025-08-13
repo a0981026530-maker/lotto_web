@@ -5,7 +5,6 @@ import pandas as pd
 
 app = Flask(__name__)
 
-# 你的 history.txt 在 GitHub 的原始檔案 URL
 HISTORY_URL = "https://raw.githubusercontent.com/a0981026530-maker/lotto_web/main/history.txt"
 
 HTML_TEMPLATE = """
@@ -13,7 +12,7 @@ HTML_TEMPLATE = """
 <html>
 <head>
     <meta charset="utf-8">
-    <title>NB直播1(專用line群組)</title>
+    <title>骰寶數據分析</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body { font-family: Arial, sans-serif; padding: 10px; font-size: 18px; }
@@ -23,18 +22,19 @@ HTML_TEMPLATE = """
         .table-container { overflow-x: auto; margin-bottom: 30px; }
         .history-block { margin-bottom: 40px; }
         h2 { margin-top: 20px; }
+        .highlight { font-weight: bold; color: red; font-size: 1.2em; }
     </style>
 </head>
 <body>
-    <h1>NB直播1(專用line群組)</h1>
+    <h1>骰寶數據分析</h1>
     <form id="searchForm">
         <label>輸入前置數字：</label>
         <input type="text" id="pattern" required>
         <button type="submit">查詢</button>
-        <button type="button" onclick="clearHistory()">清除紀錄</button>
     </form>
 
     <div id="compareTable"></div>
+    <div id="sumTop3"></div>
     <div id="results"></div>
 
     <script>
@@ -43,7 +43,6 @@ HTML_TEMPLATE = """
             const container = document.getElementById("results");
             container.innerHTML = "";
 
-            // 畫出歷史查詢
             history.forEach(entry => {
                 const block = document.createElement("div");
                 block.className = "history-block";
@@ -59,7 +58,6 @@ HTML_TEMPLATE = """
                 container.appendChild(block);
             });
 
-            // 如果有至少兩筆，畫對比表
             renderCompareTable();
         }
 
@@ -67,18 +65,20 @@ HTML_TEMPLATE = """
             const history = JSON.parse(localStorage.getItem("searchHistory") || "[]");
             if (history.length < 2) {
                 document.getElementById("compareTable").innerHTML = "";
+                document.getElementById("sumTop3").innerHTML = "";
                 return;
             }
 
-            const first = history[0]; // 最新
-            const second = history[1]; // 第二新
+            const first = history[0];
+            const second = history[1];
 
-            // 數字 1–6 的對比
             let rows = "";
+            let sumCounts = {};
             for (let num = 1; num <= 6; num++) {
-                const firstCount = first.results.find(r => r[0] === num) ? first.results.find(r => r[0] === num)[1] : 0;
-                const secondCount = second.results.find(r => r[0] === num) ? second.results.find(r => r[0] === num)[1] : 0;
+                const firstCount = first.results.find(r => r[0] === num)?.[1] || 0;
+                const secondCount = second.results.find(r => r[0] === num)?.[1] || 0;
                 rows += `<tr><td>${num}</td><td>${firstCount}</td><td>${secondCount}</td></tr>`;
+                sumCounts[num] = firstCount + secondCount;
             }
 
             document.getElementById("compareTable").innerHTML = `
@@ -90,12 +90,25 @@ HTML_TEMPLATE = """
                     </table>
                 </div>
             `;
+
+            // 加總後排序前三名
+            const sorted = Object.entries(sumCounts).sort((a,b) => b[1] - a[1]).slice(0,3);
+            const top3Text = sorted.map(item => `${item[0]} (${item[1]}次)`).join(", ");
+            document.getElementById("sumTop3").innerHTML = `
+                <h2>加總後的前三名</h2>
+                <p class="highlight">${top3Text}</p>
+            `;
         }
 
         document.getElementById("searchForm").addEventListener("submit", async (e) => {
             e.preventDefault();
             const pattern = document.getElementById("pattern").value.trim();
             if (!pattern) return;
+
+            // 若是 5 碼自動清除舊紀錄
+            if (pattern.length === 5) {
+                localStorage.clear();
+            }
 
             const res = await fetch(`/api/search?pattern=${pattern}`);
             const data = await res.json();
@@ -110,12 +123,6 @@ HTML_TEMPLATE = """
             }
         });
 
-        function clearHistory() {
-            localStorage.removeItem("searchHistory");
-            renderHistory();
-        }
-
-        // 初始化渲染
         renderHistory();
     </script>
 </body>
