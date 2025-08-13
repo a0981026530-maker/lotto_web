@@ -1,17 +1,17 @@
-from flask import Flask, request, render_template_string
+from flask import Flask, render_template_string
 import pandas as pd
 import re
-import os
 
 app = Flask(__name__)
 
-# 讀取本地 history.txt（放在同資料夾）
-TXT_PATH = os.path.join(os.path.dirname(__file__), "history.txt")
+# 固定讀取本地 history.txt（部署時會一起放進去）
+TXT_PATH = "history.txt"
 
-def load_segments_from_file(path):
+def load_segments(path):
+    """讀取檔案並切成多段，忽略非 1–6 的符號"""
+    segments = []
     with open(path, "r", encoding="utf-8") as f:
         raw = f.read()
-    segments = []
     raw_segments = re.split(r"[【】#\n\r]+", raw)
     for seg in raw_segments:
         digits = [int(x) for x in seg if x in "123456"]
@@ -20,8 +20,9 @@ def load_segments_from_file(path):
     return segments
 
 def find_next_digit_counts(segments, pattern):
+    """在多段數據中，統計 pattern 後出現的數字"""
     if not re.fullmatch(r"[1-6]+", pattern):
-        return None, 0
+        return [0]*6, 0
     pat = [int(c) for c in pattern]
     L = len(pat)
     counts = [0] * 6
@@ -41,47 +42,17 @@ def calc_table(counts, total):
     df = pd.DataFrame(rows, columns=["數字", "次數", "機率"])
     return df.sort_values(by="次數", ascending=False).reset_index(drop=True)
 
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>數字分析工具</title>
-</head>
-<body>
-    <h1>數字分析工具（雲端版）</h1>
-    <form method="post">
-        <p>輸入前置數字（1-6）：<input type="text" name="pattern" required></p>
-        <p><input type="submit" value="分析"></p>
-    </form>
-    {% if result %}
-        <h2>分析結果（依次數排序）</h2>
-        <table border="1" cellpadding="5">
-            <tr><th>數字</th><th>次數</th><th>機率</th></tr>
-            {% for row in result %}
-                <tr><td>{{ row[0] }}</td><td>{{ row[1] }}</td><td>{{ row[2] }}</td></tr>
-            {% endfor %}
-        </table>
-    {% endif %}
-</body>
-</html>
-"""
-
-@app.route("/", methods=["GET", "POST"])
+@app.route('/')
 def index():
-    result = None
-    if request.method == "POST":
-        pattern = request.form.get("pattern", "").strip()
-        segments = load_segments_from_file(TXT_PATH)
-        counts, total = find_next_digit_counts(segments, pattern)
-        if total > 0:
-            df = calc_table(counts, total)
-            result = df.values.tolist()
-    return render_template_string(HTML_TEMPLATE, result=result)
+    pattern = "1"  # 預設範例
+    segments = load_segments(TXT_PATH)
+    counts, total = find_next_digit_counts(segments, pattern)
+    df = calc_table(counts, total)
+    html_table = df.to_html(index=False)
+    return render_template_string("""
+        <h1>數字分析結果 (pattern: {{pattern}})</h1>
+        {{table | safe}}
+    """, table=html_table, pattern=pattern)
 
-# Vercel 會用 handler 來啟動
-def handler(event, context):
-    return app(event, context)
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+if __name__ == '__main__':
+    app.run()
