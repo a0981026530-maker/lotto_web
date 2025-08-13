@@ -1,10 +1,11 @@
 from flask import Flask, request, render_template_string
 import requests
-from collections import Counter
+import re
+import pandas as pd
 
 app = Flask(__name__)
 
-# 你的 history.txt raw 連結
+# 你的 GitHub raw 檔案網址（固定讀最新 history.txt）
 HISTORY_URL = "https://raw.githubusercontent.com/a0981026530-maker/lotto_web/main/history.txt"
 
 HTML_TEMPLATE = """
@@ -17,8 +18,8 @@ HTML_TEMPLATE = """
 <body>
     <h1>數字分析工具</h1>
     <form method="get">
-        <label>輸入 Pattern 數字：</label>
-        <input type="number" name="pattern" required>
+        <label>輸入前置數字 (例如 5碼後、4碼後)：</label>
+        <input type="text" name="pattern" required>
         <button type="submit">查詢</button>
     </form>
 
@@ -26,47 +27,67 @@ HTML_TEMPLATE = """
         <h2>數字分析結果 (pattern: {{ pattern }})</h2>
         <table border="1" cellpadding="5">
             <tr><th>數字</th><th>次數</th><th>機率</th></tr>
-            {% for num, count, pct in results %}
+            {% for num, cnt, pct in results %}
                 <tr>
                     <td>{{ num }}</td>
-                    <td>{{ count }}</td>
-                    <td>{{ pct }}%</td>
+                    <td>{{ cnt }}</td>
+                    <td>{{ pct }}</td>
                 </tr>
             {% endfor %}
         </table>
+    {% elif pattern %}
+        <p style="color:red;">❌ 找不到該組合</p>
     {% endif %}
 </body>
 </html>
 """
 
-def load_history():
-    """從 GitHub 讀取 history.txt"""
+def load_segments():
+    """從 GitHub 讀取並分段處理數據"""
     r = requests.get(HISTORY_URL)
     r.raise_for_status()
-    return r.text.splitlines()
+    raw = r.text
+    raw_segments = re.split(r"[【】#\n\r]+", raw)
+    segments = []
+    for seg in raw_segments:
+        digits = [int(x) for x in seg if x in "123456"]
+        if digits:
+            segments.append(digits)
+    return segments
 
-def analyze_numbers(data, pattern_length):
-    """分析數字出現次數"""
-    numbers = []
-    for line in data:
-        for i in range(len(line) - pattern_length + 1):
-            numbers.append(line[i:i+pattern_length])
+def find_next_digit_counts(segments, pattern):
+    """統計 pattern 後出現的數字"""
+    if not re.fullmatch(r"[1-6]+", pattern):
+        return None, 0
+    pat = [int(c) for c in pattern]
+    L = len(pat)
+    counts = [0] * 6
+    for seg in segments:
+        for i in range(len(seg) - L):
+            if seg[i:i+L] == pat:
+                nxt = seg[i+L]
+                counts[nxt-1] += 1
+    return counts, sum(counts)
 
-    counter = Counter(numbers)
-    total = sum(counter.values())
-
-    results = [(num, cnt, round(cnt / total * 100, 2)) for num, cnt in counter.most_common()]
-    return results
+def calc_table(counts, total):
+    """回傳排序好的表格資料"""
+    rows = []
+    for d in range(1, 7):
+        cnt = counts[d-1]
+        prob = f"{(cnt / total * 100):.2f}%" if total else "0.00%"
+        rows.append((d, cnt, prob))
+    df = pd.DataFrame(rows, columns=["數字", "次數", "機率"])
+    return df.sort_values(by="次數", ascending=False).values.tolist()
 
 @app.route("/", methods=["GET"])
 def index():
-    pattern = request.args.get("pattern", type=int)
+    pattern = request.args.get("pattern", "").strip()
     results = None
-
     if pattern:
-        history_data = load_history()
-        results = analyze_numbers(history_data, pattern)
-
+        segments = load_segments()
+        counts, total = find_next_digit_counts(segments, pattern)
+        if total > 0:
+            results = calc_table(counts, total)
     return render_template_string(HTML_TEMPLATE, results=results, pattern=pattern)
 
 if __name__ == "__main__":
