@@ -5,7 +5,7 @@ import pandas as pd
 
 app = Flask(__name__)
 
-# 你的 GitHub raw 檔案網址（固定讀最新 history.txt）
+# 你的 GitHub raw 檔案網址
 HISTORY_URL = "https://raw.githubusercontent.com/a0981026530-maker/lotto_web/main/history.txt"
 
 HTML_TEMPLATE = """
@@ -13,19 +13,48 @@ HTML_TEMPLATE = """
 <html>
 <head>
     <meta charset="utf-8">
-    <title>數字分析工具</title>
+    <title>NB直播1專用</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 10px;
+            font-size: 18px;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        input, button {
+            font-size: 18px;
+            padding: 8px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 18px;
+        }
+        th, td {
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: center;
+        }
+        .table-container {
+            overflow-x: auto;
+        }
+    </style>
 </head>
 <body>
     <h1>數字分析工具</h1>
     <form method="get">
-        <label>輸入前置數字 (例如 5碼後、4碼後)：</label>
+        <label>輸入前置數字：</label>
         <input type="text" name="pattern" required>
         <button type="submit">查詢</button>
     </form>
 
     {% if results %}
-        <h2>數字分析結果 (pattern: {{ pattern }})</h2>
-        <table border="1" cellpadding="5">
+    <h2>數字分析結果 (pattern: {{ pattern }})</h2>
+    <div class="table-container">
+        <table>
             <tr><th>數字</th><th>次數</th><th>機率</th></tr>
             {% for num, cnt, pct in results %}
                 <tr>
@@ -35,6 +64,7 @@ HTML_TEMPLATE = """
                 </tr>
             {% endfor %}
         </table>
+    </div>
     {% elif pattern %}
         <p style="color:red;">❌ 找不到該組合</p>
     {% endif %}
