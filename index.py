@@ -12,7 +12,7 @@ HTML_TEMPLATE = """
 <html>
 <head>
     <meta charset="utf-8">
-    <title>骰寶數據分析</title>
+    <title>NB直播骰【請到1】</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body { font-family: Arial, sans-serif; padding: 10px; font-size: 18px; }
@@ -26,11 +26,11 @@ HTML_TEMPLATE = """
     </style>
 </head>
 <body>
-    <h1>骰寶數據分析</h1>
+    <h1>NB直播骰【請到1】</h1>
     <form id="searchForm">
-        <label>輸入前置數字：</label>
+        <label>請輸入開獎結果的最後5個、再搭配最後4個做搭配：</label>
         <input type="text" id="pattern" required>
-        <button type="submit">查詢</button>
+        <button type="submit">輸贏不負責</button>
     </form>
 
     <div id="compareTable"></div>
