@@ -46,12 +46,32 @@ def index():
         <meta charset="utf-8">
         <title>數字分析工具</title>
         <style>
-            body { font-family: Arial; margin: 20px; }
+            body { font-family: Arial; margin: 10px; }
             table { border-collapse: collapse; width: 100%; margin-top: 10px; }
             th, td { border: 1px solid #ccc; padding: 5px; text-align: center; }
             .top1 { background-color: #ff9999; font-weight: bold; }
             .top2 { background-color: #99ff99; font-weight: bold; }
             .top3 { background-color: #9999ff; font-weight: bold; }
+            h3 { margin-top: 20px; }
+
+            /* 手機版卡片化 */
+            @media (max-width: 768px) {
+                table, thead, tbody, th, td, tr { display: block; }
+                thead tr { display: none; }
+                tr { margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; padding: 5px; }
+                td { text-align: left; padding-left: 50%; position: relative; }
+                td:before {
+                    position: absolute;
+                    left: 10px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    white-space: nowrap;
+                    font-weight: bold;
+                }
+                td:nth-of-type(1):before { content: "數字"; }
+                td:nth-of-type(2):before { content: "次數"; }
+                td:nth-of-type(3):before { content: "機率"; }
+            }
         </style>
     </head>
     <body>
@@ -100,12 +120,12 @@ def index():
                 let html = "";
                 historyData.forEach((item, idx) => {
                     html += `<h3>${idx+1}：${item.pattern}</h3>`;
-                    html += "<table><tr><th>數字</th><th>次數</th><th>機率</th></tr>";
+                    html += "<table><thead><tr><th>數字</th><th>次數</th><th>機率</th></tr></thead><tbody>";
                     item.table.forEach((row, rIdx) => {
                         let cls = rIdx===0 ? "top1" : rIdx===1 ? "top2" : rIdx===2 ? "top3" : "";
                         html += `<tr class="${cls}"><td>${row["數字"]}</td><td>${row["次數"]}</td><td>${row["機率"]}</td></tr>`;
                     });
-                    html += "</table>";
+                    html += "</tbody></table>";
                 });
                 document.getElementById("results").innerHTML = html;
             }
@@ -127,11 +147,11 @@ def index():
                 });
 
                 if (common.length > 0) {
-                    let html = "<h3>共同數字表</h3><table><tr><th>數字</th><th>5碼次數</th><th>4碼次數</th></tr>";
+                    let html = "<h3>共同數字表</h3><table><thead><tr><th>數字</th><th>5碼次數</th><th>4碼次數</th></tr></thead><tbody>";
                     common.forEach(c => {
                         html += `<tr><td>${c["數字"]}</td><td>${c["5碼次數"]}</td><td>${c["4碼次數"]}</td></tr>`;
                     });
-                    html += "</table>";
+                    html += "</tbody></table>";
                     document.getElementById("commonNumbers").innerHTML = html;
                 }
             }
@@ -152,12 +172,12 @@ def index():
 
                 sumArr.sort((a,b) => b["總次數"] - a["總次數"]);
 
-                let html = "<h3>加總前三名</h3><table><tr><th>數字</th><th>總次數</th></tr>";
+                let html = "<h3>加總前三名</h3><table><thead><tr><th>數字</th><th>總次數</th></tr></thead><tbody>";
                 sumArr.forEach((row, idx) => {
                     let cls = idx===0 ? "top1" : idx===1 ? "top2" : idx===2 ? "top3" : "";
                     html += `<tr class="${cls}"><td>${row["數字"]}</td><td>${row["總次數"]}</td></tr>`;
                 });
-                html += "</table>";
+                html += "</tbody></table>";
                 document.getElementById("sumTop3").innerHTML = html;
             }
 
@@ -179,12 +199,12 @@ def index():
                     if ([4,5,6].includes(num)) big += cnt;
                 });
 
-                let html = "<h3>加總單雙大小</h3><table><tr><th>類型</th><th>總次數</th></tr>";
+                let html = "<h3>加總單雙大小</h3><table><thead><tr><th>類型</th><th>總次數</th></tr></thead><tbody>";
                 html += `<tr><td>單</td><td>${odd}</td></tr>`;
                 html += `<tr><td>雙</td><td>${even}</td></tr>`;
                 html += `<tr><td>小</td><td>${small}</td></tr>`;
                 html += `<tr><td>大</td><td>${big}</td></tr>`;
-                html += "</table>";
+                html += "</tbody></table>";
 
                 document.getElementById("sumOddEvenBigSmall").innerHTML = html;
             }
