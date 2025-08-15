@@ -6,7 +6,6 @@ app = Flask(__name__)
 
 TXT_PATH = "history.txt"
 
-# 讀取分段資料
 def load_segments():
     segments = []
     with open(TXT_PATH, "r", encoding="utf-8") as f:
@@ -18,7 +17,6 @@ def load_segments():
             segments.append(digits)
     return segments
 
-# 統計 pattern 後出現的數字
 def find_next_digit_counts(segments, pattern):
     pat = [int(c) for c in pattern]
     L = len(pat)
@@ -30,7 +28,6 @@ def find_next_digit_counts(segments, pattern):
                 counts[nxt-1] += 1
     return counts, sum(counts)
 
-# 排序數字表
 def calc_table(counts, total):
     rows = []
     for d in range(1, 7):
@@ -55,21 +52,16 @@ def index():
             .top1 { background-color: #ff9999; font-weight: bold; }
             .top2 { background-color: #99ff99; font-weight: bold; }
             .top3 { background-color: #9999ff; font-weight: bold; }
-            @media (max-width: 600px) {
-                table, thead, tbody, th, td, tr { display: block; }
-                th { background: #f4f4f4; }
-                td { border: none; position: relative; padding-left: 50%; text-align: left; }
-                td:before { position: absolute; left: 10px; white-space: nowrap; }
-            }
         </style>
     </head>
     <body>
         <h1>數字分析工具</h1>
         <input id="pattern" placeholder="輸入前置數字">
         <button onclick="search()">查詢</button>
-        <button onclick="clearHistory()">清除紀錄</button>
         <div id="results"></div>
         <div id="commonNumbers"></div>
+        <div id="sumTop3"></div>
+        <div id="sumOddEvenBigSmall"></div>
 
         <script>
             let historyData = [];
@@ -80,6 +72,13 @@ def index():
                     alert("只能輸入 1-6 數字");
                     return;
                 }
+                if (pattern.length === 5) {
+                    historyData = [];
+                    document.getElementById("commonNumbers").innerHTML = "";
+                    document.getElementById("sumTop3").innerHTML = "";
+                    document.getElementById("sumOddEvenBigSmall").innerHTML = "";
+                }
+
                 fetch("/search", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
@@ -91,6 +90,8 @@ def index():
                     renderResults();
                     if (historyData.length === 2) {
                         renderCommonNumbers();
+                        renderSumTop3();
+                        renderSumOddEvenBigSmall();
                     }
                 });
             }
@@ -135,10 +136,57 @@ def index():
                 }
             }
 
-            function clearHistory() {
-                historyData = [];
-                document.getElementById("results").innerHTML = "";
-                document.getElementById("commonNumbers").innerHTML = "";
+            function renderSumTop3() {
+                const sumMap = {};
+                historyData.forEach(h => {
+                    h.table.forEach(r => {
+                        if (!sumMap[r["數字"]]) sumMap[r["數字"]] = 0;
+                        sumMap[r["數字"]] += r["次數"];
+                    });
+                });
+
+                const sumArr = Object.entries(sumMap).map(([num, cnt]) => ({
+                    "數字": parseInt(num),
+                    "總次數": cnt
+                }));
+
+                sumArr.sort((a,b) => b["總次數"] - a["總次數"]);
+
+                let html = "<h3>加總前三名</h3><table><tr><th>數字</th><th>總次數</th></tr>";
+                sumArr.forEach((row, idx) => {
+                    let cls = idx===0 ? "top1" : idx===1 ? "top2" : idx===2 ? "top3" : "";
+                    html += `<tr class="${cls}"><td>${row["數字"]}</td><td>${row["總次數"]}</td></tr>`;
+                });
+                html += "</table>";
+                document.getElementById("sumTop3").innerHTML = html;
+            }
+
+            function renderSumOddEvenBigSmall() {
+                const sumMap = {};
+                historyData.forEach(h => {
+                    h.table.forEach(r => {
+                        if (!sumMap[r["數字"]]) sumMap[r["數字"]] = 0;
+                        sumMap[r["數字"]] += r["次數"];
+                    });
+                });
+
+                let odd = 0, even = 0, small = 0, big = 0;
+                Object.entries(sumMap).forEach(([num, cnt]) => {
+                    num = parseInt(num);
+                    if ([1,3,5].includes(num)) odd += cnt;
+                    if ([2,4,6].includes(num)) even += cnt;
+                    if ([1,2,3].includes(num)) small += cnt;
+                    if ([4,5,6].includes(num)) big += cnt;
+                });
+
+                let html = "<h3>加總單雙大小</h3><table><tr><th>類型</th><th>總次數</th></tr>";
+                html += `<tr><td>單</td><td>${odd}</td></tr>`;
+                html += `<tr><td>雙</td><td>${even}</td></tr>`;
+                html += `<tr><td>小</td><td>${small}</td></tr>`;
+                html += `<tr><td>大</td><td>${big}</td></tr>`;
+                html += "</table>";
+
+                document.getElementById("sumOddEvenBigSmall").innerHTML = html;
             }
         </script>
     </body>
