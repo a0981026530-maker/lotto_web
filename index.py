@@ -12,7 +12,7 @@ HTML_TEMPLATE = """
 <html>
 <head>
 <meta charset="utf-8">
-<title>骰寶數據分析</title>
+<title>NB直播1數據(請用直播1，若要更精確請加LINE 19931026a)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body { font-family: Arial, sans-serif; padding: 10px; font-size: 18px; }
@@ -26,7 +26,7 @@ h2 { margin-top: 20px; }
 </style>
 </head>
 <body>
-<h1>骰寶數據分析</h1>
+<h1>NB直播1數據(請用直播1，若要更精確請加LINE 19931026a)</h1>
 <form id="searchForm">
     <label>輸入前置數字：</label>
     <input type="text" id="pattern" required>
@@ -107,8 +107,8 @@ function renderCompareTable() {
         <h2>加總後的前三名</h2>
         <p class="highlight">${top3Text}</p>
         <h3>單雙大小統計</h3>
-        <p>單: ${odd} 次，雙: ${even} 次</p>
-        <p>小: ${small} 次，大: ${big} 次</p>
+        <p>單: <span class="highlight">${odd}</span> 次，雙: <span class="highlight">${even}</span> 次</p>
+        <p>小: <span class="highlight">${small}</span> 次，大: <span class="highlight">${big}</span> 次</p>
     `;
 }
 
