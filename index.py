@@ -1,8 +1,9 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, render_template_string, request, jsonify
 import re
 
 app = Flask(__name__)
 
+# 讀取數據
 TXT_PATH = "history.txt"
 
 def load_segments(path):
@@ -16,89 +17,65 @@ def load_segments(path):
             segments.append(digits)
     return segments
 
-def find_next_digit_counts(segments, pattern):
-    if not re.fullmatch(r"[1-6]+", pattern):
-        return [0]*6, 0
-    pat = [int(c) for c in pattern]
-    L = len(pat)
-    counts = [0]*6
-    for seg in segments:
-        for i in range(len(seg)-L):
-            if seg[i:i+L] == pat:
-                nxt = seg[i+L]
-                counts[nxt-1]+=1
-    return counts, sum(counts)
-
 segments = load_segments(TXT_PATH)
 
-@app.route("/")
-def index():
-    return render_template_string("""
+def find_next_digit_counts(segments, pattern):
+    pat = [int(c) for c in pattern]
+    L = len(pat)
+    counts = [0] * 6
+    for seg in segments:
+        for i in range(len(seg) - L):
+            if seg[i:i+L] == pat:
+                nxt = seg[i+L]
+                counts[nxt-1] += 1
+    return counts, sum(counts)
+
+# HTML 模板
+TEMPLATE = """
 <!DOCTYPE html>
-<html>
+<html lang="zh">
 <head>
-  <meta charset="utf-8">
-  <title>數字分析工具</title>
-  <style>
-    body { font-family: Arial; padding:15px; max-width:600px; margin:auto; }
-    input, button { padding:8px; font-size:16px; margin:5px 0; }
-    table { border-collapse: collapse; margin-top:10px; width:100%; font-size:14px; }
-    th, td { border:1px solid #ccc; padding:6px; text-align:center; }
-    .highlight { font-weight:bold; font-size:18px; color:#d9534f; }
-    .diff-box {
-        border:2px solid red;
-        padding:8px;
-        margin:8px 0;
-        font-weight:bold;
-        color:#d9534f;
-        background:#ffe6e6;
-        border-radius:5px;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>數字分析工具</title>
+<style>
+  body { font-family: Arial, sans-serif; margin:20px; font-size:20px; }
+  input { font-size:20px; padding:5px; }
+  button { font-size:20px; padding:5px 10px; }
+  table { border-collapse: collapse; margin-top:15px; width:100%; font-size:20px; }
+  th, td { border:1px solid #333; padding:6px; text-align:center; }
+  .highlight { font-weight:bold; font-size:24px; color:blue; }
+  .diff-box { border:2px solid red; padding:8px; margin:5px 0; font-weight:bold; font-size:22px; }
+</style>
 </head>
 <body>
   <h1>數字分析工具</h1>
-  <input id="pattern" placeholder="輸入 6碼 / 5碼 / 4碼">
-  <button onclick="search()">查詢</button>
-
+  <p>請輸入 6碼 → 5碼 → 4碼，完成後會自動顯示結果。</p>
+  <input id="patternInput" placeholder="輸入號碼">
+  <button onclick="analyze()">查詢</button>
+  
   <div id="summary"></div>
-  <div id="results"></div>
   <div id="compare"></div>
 
 <script>
 let records = [];
 
-async function search(){
-  const pattern = document.getElementById("pattern").value.trim();
-  if (!pattern) return;
-  const res = await fetch("/api/search", {
+function analyze(){
+  const pattern = document.getElementById("patternInput").value.trim();
+  if(!pattern) return;
+
+  fetch("/analyze", {
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({pattern})
+    body:JSON.stringify({pattern:pattern})
+  })
+  .then(r=>r.json())
+  .then(data=>{
+    records.push(data);
+    if(records.length===3){
+      renderCompareTable();
+    }
   });
-  const data = await res.json();
-  if (data.error){
-    alert(data.error); return;
-  }
-  records.push({pattern: pattern, counts:data.counts, total:data.total});
-  showResult(pattern, data);
-
-  if (records.length === 3){
-    renderCompareTable();
-    records = [];
-  }
-}
-
-function showResult(pattern, data){
-  let html = `<h2>查詢 ${pattern}</h2>`;
-  html += `<table><tr><th>數字</th><th>次數</th><th>機率</th></tr>`;
-  for (let i=0;i<6;i++){
-    const cnt = data.counts[i];
-    const prob = data.total ? ((cnt/data.total)*100).toFixed(0)+"%" : "0%";
-    html += `<tr><td>${i+1}</td><td>${cnt}</td><td>${prob}</td></tr>`;
-  }
-  html += "</table>";
-  document.getElementById("results").innerHTML += html;
+  document.getElementById("patternInput").value="";
 }
 
 function renderCompareTable(){
@@ -126,7 +103,7 @@ function renderCompareTable(){
   const diffOddEven = odd>even?`單比雙多 ${odd-even} 次`:even>odd?`雙比單多 ${even-odd} 次`:"單雙一樣多";
   const diffBigSmall = big>small?`大比小多 ${big-small} 次`:small>big?`小比大多 ${small-big} 次`:"大小一樣多";
 
-  // 統計摘要放最上面
+  // 摘要放最上面
   document.getElementById("summary").innerHTML = `
     <h2>加總結果摘要</h2>
     <p class="highlight">前三名：${top3Text}</p>
@@ -134,27 +111,32 @@ function renderCompareTable(){
     <div class="diff-box">大 ${big}，小 ${small} → ${diffBigSmall}</div>
   `;
 
-  // 對比表維持在下面
+  // 對比表（覆蓋，不累積）
   document.getElementById("compare").innerHTML = `
     <h2>三組對比結果 (6碼+5碼+4碼)</h2>
     <table><tr><th>數字</th><th>次數</th><th>機率</th></tr>
     ${arr.map(o=>`<tr><td>${o.num}</td><td>${o.cnt}</td><td>${(o.prob*100).toFixed(0)}%</td></tr>`).join("")}
     </table>
   `;
+
+  // ⭐ 自動清空，準備下一輪
+  records = [];
 }
 </script>
 </body>
 </html>
-    """)
+"""
 
-@app.route("/api/search", methods=["POST"])
-def api_search():
+@app.route("/")
+def index():
+    return render_template_string(TEMPLATE)
+
+@app.route("/analyze", methods=["POST"])
+def analyze():
     data = request.get_json()
     pattern = data.get("pattern","")
-    counts,total = find_next_digit_counts(segments, pattern)
-    if total==0:
-        return jsonify({"error":"找不到組合"})
-    return jsonify({"counts":counts,"total":total})
+    counts, total = find_next_digit_counts(segments, pattern)
+    return jsonify({"pattern":pattern,"counts":counts,"total":total})
 
-if __name__=="__main__":
+if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
