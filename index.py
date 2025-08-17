@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify, render_template_string
 import re
-import os
 
 app = Flask(__name__)
 
@@ -39,24 +38,32 @@ def index():
 <html>
 <head>
   <meta charset="utf-8">
-  <title>詳細使用方法請詳(Line:19931026a)</title>
+  <title>數字分析工具</title>
   <style>
-    body { font-family: Arial; padding:20px; }
-    input { padding:5px; font-size:16px; }
-    button { padding:5px 10px; font-size:16px; }
-    table { border-collapse: collapse; margin-top:10px; width:100%; }
+    body { font-family: Arial; padding:15px; max-width:600px; margin:auto; }
+    input, button { padding:8px; font-size:16px; margin:5px 0; }
+    table { border-collapse: collapse; margin-top:10px; width:100%; font-size:14px; }
     th, td { border:1px solid #ccc; padding:6px; text-align:center; }
     .highlight { font-weight:bold; font-size:18px; color:#d9534f; }
+    .diff-box {
+        border:2px solid red;
+        padding:8px;
+        margin:8px 0;
+        font-weight:bold;
+        color:#d9534f;
+        background:#ffe6e6;
+        border-radius:5px;
+    }
   </style>
 </head>
 <body>
-  <h1>詳細使用方法請詳(Line:19931026a)</h1>
+  <h1>數字分析工具</h1>
   <input id="pattern" placeholder="輸入 6碼 / 5碼 / 4碼">
   <button onclick="search()">查詢</button>
 
+  <div id="summary"></div>
   <div id="results"></div>
   <div id="compare"></div>
-  <div id="sumTop3"></div>
 
 <script>
 let records = [];
@@ -76,10 +83,9 @@ async function search(){
   records.push({pattern: pattern, counts:data.counts, total:data.total});
   showResult(pattern, data);
 
-  // 等到三次 (6碼、5碼、4碼) 才做對比
   if (records.length === 3){
     renderCompareTable();
-    records = []; // 自動清除，準備下一輪
+    records = [];
   }
 }
 
@@ -117,21 +123,23 @@ function renderCompareTable(){
     if ([1,2,3].includes(num)) small+=c;
     if ([4,5,6].includes(num)) big+=c;
   });
-  const diffOddEven = odd>even?`👉 單比雙多 ${odd-even} 次`:even>odd?`👉 雙比單多 ${even-odd} 次`:"👉 單雙一樣多";
-  const diffBigSmall = big>small?`👉 大比小多 ${big-small} 次`:small>big?`👉 小比大多 ${small-big} 次`:"👉 大小一樣多";
+  const diffOddEven = odd>even?`單比雙多 ${odd-even} 次`:even>odd?`雙比單多 ${even-odd} 次`:"單雙一樣多";
+  const diffBigSmall = big>small?`大比小多 ${big-small} 次`:small>big?`小比大多 ${small-big} 次`:"大小一樣多";
 
+  // 統計摘要放最上面
+  document.getElementById("summary").innerHTML = `
+    <h2>加總結果摘要</h2>
+    <p class="highlight">前三名：${top3Text}</p>
+    <div class="diff-box">單 ${odd}，雙 ${even} → ${diffOddEven}</div>
+    <div class="diff-box">大 ${big}，小 ${small} → ${diffBigSmall}</div>
+  `;
+
+  // 對比表維持在下面
   document.getElementById("compare").innerHTML = `
     <h2>三組對比結果 (6碼+5碼+4碼)</h2>
     <table><tr><th>數字</th><th>次數</th><th>機率</th></tr>
     ${arr.map(o=>`<tr><td>${o.num}</td><td>${o.cnt}</td><td>${(o.prob*100).toFixed(0)}%</td></tr>`).join("")}
     </table>
-  `;
-  document.getElementById("sumTop3").innerHTML = `
-    <h2>加總後的前三名</h2>
-    <p class="highlight">${top3Text}</p>
-    <h3>單雙大小統計</h3>
-    <p>單 ${odd}，雙 ${even}</p><p>${diffOddEven}</p>
-    <p>大 ${big}，小 ${small}</p><p>${diffBigSmall}</p>
   `;
 }
 </script>
