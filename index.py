@@ -1,9 +1,21 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, session, redirect, url_for, jsonify
 import re
+import pandas as pd
 
 app = Flask(__name__)
+app.secret_key = "your_secret_key_123"  # 請自己換成隨機字串
 
-def load_segments(path="history.txt"):
+# 多使用者帳號密碼管理
+USERS = {
+    "a0981026530": "Aa0981026530",
+    "a0981026531": "Aa0978543515a",
+    "a0981026532": "Aa0978543515ab"
+}
+
+# ======= 輔助函數 =======
+TXT_PATH = "history.txt"
+
+def load_segments(path):
     segments = []
     with open(path, "r", encoding="utf-8") as f:
         raw = f.read()
@@ -14,145 +26,128 @@ def load_segments(path="history.txt"):
             segments.append(digits)
     return segments
 
-segments = load_segments()
-
 def find_next_digit_counts(segments, pattern):
+    if not re.fullmatch(r"[1-6]+", pattern):
+        return [0]*6, 0
     pat = [int(c) for c in pattern]
     L = len(pat)
-    counts = [0] * 6
+    counts = [0]*6
     for seg in segments:
-        for i in range(len(seg) - L):
+        for i in range(len(seg)-L):
             if seg[i:i+L] == pat:
-                counts[seg[i+L]-1] += 1
+                nxt = seg[i+L]
+                counts[nxt-1] += 1
     return counts, sum(counts)
 
+def make_table(title, counts, total):
+    rows = []
+    for d in range(1, 7):
+        cnt = counts[d-1]
+        prob = cnt / total if total else 0
+        rows.append([d, cnt, f"{prob:.0%}"])
+    df = pd.DataFrame(rows, columns=["數字", "次數", "機率"])
+    df = df.sort_values(by="次數", ascending=False).reset_index(drop=True)
+    return f"<h3>{title}</h3>" + df.to_html(index=False)
+
+def count_bs_oe(counts):
+    odd = counts[0] + counts[2] + counts[4]
+    even = counts[1] + counts[3] + counts[5]
+    small = counts[0] + counts[1] + counts[2]
+    big = counts[3] + counts[4] + counts[5]
+    return odd, even, small, big
+
+# ======= 登入系統 =======
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+        if username in USERS and USERS[username] == password:
+            session["logged_in"] = True
+            session["username"] = username
+            return redirect(url_for("index"))
+        else:
+            return "<h3>帳號或密碼錯誤</h3><a href='/login'>再試一次</a>"
+    return """
+    <h2>請登入</h2>
+    <form method="post">
+        帳號: <input name="username"><br>
+        密碼: <input type="password" name="password"><br>
+        <button type="submit">登入</button>
+    </form>
+    """
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+# ======= 主頁 =======
 @app.route("/")
 def index():
-    return render_template_string("""
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>數字分析工具</title>
-<style>
-body { font-family: Arial, sans-serif; padding: 10px; font-size: 20px; }
-input, button { padding: 10px; font-size: 20px; margin: 5px 0; }
-h1 { font-size: 28px; }
-h2 { font-size: 24px; margin-top: 20px; }
-h3 { font-size: 22px; margin: 10px 0; }
-table { border-collapse: collapse; margin: 10px 0; width: 100%; max-width: 300px; font-size: 18px; }
-th, td { border: 2px solid #333; padding: 8px; text-align: center; }
-.highlight { font-weight: bold; font-size: 22px; color: blue; }
-.diff-box { border: 3px solid red; padding: 8px; margin: 10px 0; font-weight: bold; font-size: 20px; }
-#tables { display: flex; gap: 15px; flex-wrap: wrap; }
-#tables > div { flex: 1; min-width: 250px; }
-</style>
-</head>
-<body>
-<h1>數字分析工具</h1>
-<input id="pattern" placeholder="輸入數字，例如123456">
-<button onclick="analyze()">查詢</button>
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
 
-<div id="summary"></div>
-<div id="compare"></div>
-<div id="tables"></div>
+    return f"""
+    <h1>數字分析工具</h1>
+    <p>✅ 歡迎 {session['username']}</p>
+    <form id="queryForm">
+        <input type="text" id="pattern6" placeholder="輸入6碼">
+        <input type="text" id="pattern5" placeholder="輸入5碼">
+        <input type="text" id="pattern4" placeholder="輸入4碼">
+        <button type="submit">查詢</button>
+    </form>
+    <div id="result"></div>
+    <a href='/logout'>登出</a>
+    <script>
+    document.getElementById("queryForm").onsubmit = async function(e) {{
+        e.preventDefault();
+        let p6 = document.getElementById("pattern6").value;
+        let p5 = document.getElementById("pattern5").value;
+        let p4 = document.getElementById("pattern4").value;
+        let res = await fetch("/analyze", {{
+            method: "POST",
+            headers: {{"Content-Type": "application/json"}},
+            body: JSON.stringify({{p6, p5, p4}})
+        }});
+        let data = await res.json();
+        document.getElementById("result").innerHTML = data.html;
+    }}
+    </script>
+    """
 
-<script>
-let records = [];
-let roundTables = [];
-
-async function analyze(){
-  const pattern = document.getElementById("pattern").value.trim();
-  if(!/^[1-6]+$/.test(pattern)){
-    alert("只能輸入 1-6 的數字");
-    return;
-  }
-
-  if(records.length === 3){
-    records = [];
-    roundTables = [];
-    document.getElementById("summary").innerHTML = "";
-    document.getElementById("compare").innerHTML = "";
-    document.getElementById("tables").innerHTML = "";
-  }
-
-  const res = await fetch("/analyze",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({pattern})
-  });
-  const data = await res.json();
-
-  records.push(data);
-
-  let tblHtml = `
-    <div>
-      <h3>${pattern} 查詢結果</h3>
-      <table><tr><th>數字</th><th>次數</th><th>機率</th></tr>
-      ${data.rows.map(r=>`<tr><td>${r.num}</td><td>${r.cnt}</td><td>${r.prob}</td></tr>`).join("")}
-      </table>
-    </div>
-  `;
-  roundTables.push(tblHtml);
-  document.getElementById("tables").innerHTML = roundTables.join("");
-
-  if(records.length === 3){
-    renderCompareTable();
-  }
-}
-
-function renderCompareTable(){
-  let sumCounts = [0,0,0,0,0,0];
-  records.forEach(r=>{
-    r.counts.forEach((c,i)=>sumCounts[i]+=c);
-  });
-  let total = sumCounts.reduce((a,b)=>a+b,0);
-  let arr = sumCounts.map((c,i)=>({num:i+1, cnt:c, prob: total? (c/total):0}));
-  arr.sort((a,b)=>b.cnt-a.cnt);
-
-  const top3 = arr.slice(0,3);
-  let top3Text = top3.map(o=>`${o.num} (${o.cnt}次)`).join(", ");
-
-  let odd=0,even=0,small=0,big=0;
-  sumCounts.forEach((c,i)=>{
-    const num=i+1;
-    if ([1,3,5].includes(num)) odd+=c;
-    if ([2,4,6].includes(num)) even+=c;
-    if ([1,2,3].includes(num)) small+=c;
-    if ([4,5,6].includes(num)) big+=c;
-  });
-  const diffOddEven = odd>even?`單比雙多 ${odd-even} 次`:even>odd?`雙比單多 ${even-odd} 次`:"單雙一樣多";
-  const diffBigSmall = big>small?`大比小多 ${big-small} 次`:small>big?`小比大多 ${small-big} 次`:"大小一樣多";
-
-  document.getElementById("summary").innerHTML = `
-    <h2>加總結果摘要</h2>
-    <p class="highlight">前三名：${top3Text}</p>
-    <div class="diff-box">單 ${odd}，雙 ${even} → ${diffOddEven}</div>
-    <div class="diff-box">大 ${big}，小 ${small} → ${diffBigSmall}</div>
-  `;
-
-  document.getElementById("compare").innerHTML = `
-    <h2>三組加總對比表</h2>
-    <table><tr><th>數字</th><th>次數</th><th>機率</th></tr>
-    ${arr.map(o=>`<tr><td>${o.num}</td><td>${o.cnt}</td><td>${(o.prob*100).toFixed(0)}%</td></tr>`).join("")}
-    </table>
-  `;
-}
-</script>
-</body>
-</html>
-    """)
-
+# ======= 分析 API =======
 @app.route("/analyze", methods=["POST"])
 def analyze():
-    data = request.get_json()
-    pattern = data.get("pattern","")
-    counts, total = find_next_digit_counts(segments, pattern)
+    if not session.get("logged_in"):
+        return jsonify({"html": "<p>請先登入</p>"})
+
+    data = request.json
+    p6, p5, p4 = data.get("p6", ""), data.get("p5", ""), data.get("p4", "")
+    segments = load_segments(TXT_PATH)
+
+    html_parts, total_counts = [], [0]*6
+
+    for title, pat in [("6碼結果", p6), ("5碼結果", p5), ("4碼結果", p4)]:
+        if pat:
+            counts, total = find_next_digit_counts(segments, pat)
+            total_counts = [a+b for a,b in zip(total_counts, counts)]
+            html_parts.append(make_table(title, counts, total))
+
+    # 總結表 (放最上面)
+    odd, even, small, big = count_bs_oe(total_counts)
     rows = []
-    for i,c in enumerate(counts):
-        prob = f"{(c/total*100):.0f}%" if total else "0%"
-        rows.append({"num":i+1, "cnt":c, "prob":prob})
-    return jsonify({"counts":counts, "rows":rows})
+    for d in range(1, 7):
+        cnt = total_counts[d-1]
+        prob = cnt / sum(total_counts) if sum(total_counts) else 0
+        rows.append([d, cnt, f"{prob:.0%}"])
+    df_total = pd.DataFrame(rows, columns=["數字", "次數", "機率"])
+    df_total = df_total.sort_values(by="次數", ascending=False).reset_index(drop=True)
+
+    summary_html = "<h2>總結</h2>" + df_total.to_html(index=False)
+    summary_html += f"<p>單: {odd} 雙: {even} 大: {big} 小: {small}</p>"
+
+    return jsonify({"html": summary_html + "".join(html_parts)})
 
 if __name__ == "__main__":
     app.run(debug=True)
