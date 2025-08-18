@@ -37,22 +37,21 @@ HTML = """
   <meta charset="utf-8">
   <title>數字分析工具</title>
   <style>
-    body { font-family: Arial; padding: 20px; }
-    input { font-size: 18px; padding: 5px; }
-    button { font-size: 18px; padding: 5px 10px; }
-    table { border-collapse: collapse; margin-top: 10px; width: 100%%; }
-    th, td { border: 1px solid #333; padding: 5px; text-align: center; }
-    .highlight { font-weight: bold; font-size: 18px; color: blue; }
-    .diff-box { border:2px solid red; padding:5px; margin:5px 0; font-weight:bold; }
+    body { font-family: Arial; padding: 15px; font-size: 18px; }
+    input, button { font-size: 20px; padding: 8px; margin: 5px 0; }
+    table { border-collapse: collapse; margin: 10px 0; width: 100%%; font-size: 18px; }
+    th, td { border: 1px solid #333; padding: 6px; text-align: center; }
+    .highlight { font-weight: bold; font-size: 20px; color: blue; }
+    .diff-box { border:2px solid red; padding:8px; margin:6px 0; font-weight:bold; font-size:18px; }
   </style>
 </head>
 <body>
   <h1>數字分析工具</h1>
   <input id="pattern" placeholder="輸入 4/5/6 碼">
   <button onclick="analyze()">查詢</button>
-  <div id="result"></div>
   <div id="summary"></div>
   <div id="compare"></div>
+  <div id="result"></div>
 
 <script>
 let records = [];
@@ -70,7 +69,7 @@ async function analyze(){
   });
   const data = await res.json();
 
-  // 即時顯示單次結果
+  // 單次結果 (只有臨時顯示)
   document.getElementById("result").innerHTML = `
     <h2>${pattern} 查詢結果</h2>
     <table><tr><th>數字</th><th>次數</th><th>機率</th></tr>
@@ -78,13 +77,14 @@ async function analyze(){
     </table>
   `;
 
-  // 累積記錄
+  // 累積
   records.push(data);
 
-  // 當輸入三次時 => 顯示加總摘要 + 對比表
+  // 三次後 → 顯示加總並清掉單次結果
   if(records.length === 3){
     renderCompareTable();
-    records = []; // 清空，準備下一輪
+    document.getElementById("result").innerHTML = ""; // 清除單次結果
+    records = []; // 重置
   }
 }
 
@@ -111,6 +111,7 @@ function renderCompareTable(){
   const diffOddEven = odd>even?`單比雙多 ${odd-even} 次`:even>odd?`雙比單多 ${even-odd} 次`:"單雙一樣多";
   const diffBigSmall = big>small?`大比小多 ${big-small} 次`:small>big?`小比大多 ${small-big} 次`:"大小一樣多";
 
+  // 加總結果放最上面
   document.getElementById("summary").innerHTML = `
     <h2>加總結果摘要</h2>
     <p class="highlight">前三名：${top3Text}</p>
@@ -118,6 +119,7 @@ function renderCompareTable(){
     <div class="diff-box">大 ${big}，小 ${small} → ${diffBigSmall}</div>
   `;
 
+  // 對比表放下面
   document.getElementById("compare").innerHTML = `
     <h2>三組對比結果 (6碼+5碼+4碼)</h2>
     <table><tr><th>數字</th><th>次數</th><th>機率</th></tr>
