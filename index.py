@@ -45,7 +45,7 @@ def login():
             return redirect(url_for("index"))
         else:
             return render_template_string("""
-            <h2>登入失敗</h2>
+            <h2>登入失敗，請加line:19931026a，購買</h2>
             <a href="/login">再試一次</a>
             """)
     return render_template_string("""
@@ -81,7 +81,7 @@ def index():
     <html>
     <head>
     <meta charset="utf-8">
-    <title>數字分析工具</title>
+    <title>感謝您的選購，如需要本金分配請私訊line(僅限直播1使用)</title>
     <style>
     body { font-family: Arial, sans-serif; padding: 10px; font-size: 20px; }
     input, button { padding: 10px; font-size: 20px; margin: 5px 0; }
@@ -97,11 +97,11 @@ def index():
     </style>
     </head>
     <body>
-    <h1>數字分析工具</h1>
+    <h1>感謝您的選購，如需要本金分配請私訊line(僅限直播1使用)</h1>
     <p>使用者：{{user}}</p>
     <a href="/logout">登出</a><br><br>
 
-    <input id="pattern" placeholder="輸入數字，例如123456">
+    <input id="pattern" placeholder="請輸入最後6個號碼+5個號碼+4個號碼">
     <button onclick="analyze()">查詢</button>
 
     <div id="summary"></div>
