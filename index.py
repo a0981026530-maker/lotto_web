@@ -11,6 +11,9 @@ USERS = {
     "admin": "123456"
 }
 
+# ====== 裝置綁定（第一次登入就綁定 User-Agent） ======
+DEVICE_BIND = {}
+
 def load_segments(path="history.txt"):
     segments = []
     with open(path, "r", encoding="utf-8") as f:
@@ -40,7 +43,20 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "")
         password = request.form.get("password", "")
+        user_agent = request.headers.get("User-Agent", "unknown")
+
         if username in USERS and USERS[username] == password:
+            # 檢查是否已綁定裝置
+            if username in DEVICE_BIND:
+                if DEVICE_BIND[username] != user_agent:
+                    return render_template_string("""
+                    <h2>登入失敗：此帳號已綁定其他裝置</h2>
+                    <a href="/login">再試一次</a>
+                    """)
+            else:
+                # 第一次登入 → 綁定裝置
+                DEVICE_BIND[username] = user_agent
+
             session["user"] = username
             return redirect(url_for("index"))
         else:
@@ -83,15 +99,15 @@ def index():
     <meta charset="utf-8">
     <title>感謝您的選購，如需要本金分配請私訊line(僅限直播1使用)</title>
     <style>
-    body { font-family: Arial, sans-serif; padding: 10px; font-size: 20px; }
-    input, button { padding: 10px; font-size: 20px; margin: 5px 0; }
+    body { font-family: Arial, sans-serif; padding: 10px; font-size: 22px; }
+    input, button { padding: 12px; font-size: 22px; margin: 6px 0; }
     h1 { font-size: 28px; }
-    h2 { font-size: 24px; margin-top: 20px; }
+    h2 { font-size: 26px; margin-top: 20px; }
     h3 { font-size: 22px; margin: 10px 0; }
-    table { border-collapse: collapse; margin: 10px 0; width: 100%; max-width: 300px; font-size: 18px; }
+    table { border-collapse: collapse; margin: 10px 0; width: 100%; max-width: 320px; font-size: 20px; }
     th, td { border: 2px solid #333; padding: 8px; text-align: center; }
     .highlight { font-weight: bold; font-size: 22px; color: blue; }
-    .diff-box { border: 3px solid red; padding: 8px; margin: 10px 0; font-weight: bold; font-size: 20px; }
+    .diff-box { border: 3px solid red; padding: 8px; margin: 10px 0; font-weight: bold; font-size: 22px; }
     #tables { display: flex; gap: 15px; flex-wrap: wrap; }
     #tables > div { flex: 1; min-width: 250px; }
     </style>
@@ -101,7 +117,7 @@ def index():
     <p>使用者：{{user}}</p>
     <a href="/logout">登出</a><br><br>
 
-    <input id="pattern" placeholder="請輸入最後6個號碼+5個號碼+4個號碼">
+    <input id="pattern" placeholder="請輸入號碼">
     <button onclick="analyze()">查詢</button>
 
     <div id="summary"></div>
