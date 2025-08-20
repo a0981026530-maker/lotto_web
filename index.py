@@ -83,7 +83,7 @@ def login():
         </style>
     </head>
     <body>
-        <h2>請登入</h2>
+        <h2>如需要此資料輔助下注、一個月只要999元(綁定一個裝置)</h2>
         <form method="POST">
             <input name="username" placeholder="帳號"><br>
             <input name="password" placeholder="密碼" type="password"><br>
