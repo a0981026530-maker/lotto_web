@@ -75,7 +75,7 @@ def login():
 
     return '''
         <form method="post">
-            <h2>登入</h2>
+            <h2>如需購買請加line:19931026a，一個月只要500元</h2>
             帳號: <input type="text" name="username"><br>
             密碼: <input type="password" name="password"><br>
             <input type="submit" value="登入">
