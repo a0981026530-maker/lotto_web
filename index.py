@@ -1,230 +1,219 @@
-from flask import Flask, request, jsonify, render_template_string, redirect, url_for, session
+from flask import Flask, render_template_string, request, jsonify, session, redirect, url_for
 import re
 
 app = Flask(__name__)
-app.secret_key = "mysecretkey"  # 換成你自己的隨機字串，保護 Session
+app.secret_key = "your_secret_key"
 
-# ====== 帳號密碼設定 ======
+# ---------------- 帳號密碼設定 ----------------
 USERS = {
     "a0981026530": "Aa0981026530",
-    "user2": "pass2",
-    "admin": "123456"
+    "user1": "pass1",
+    "user2": "pass2"
 }
 
-# ====== 裝置綁定（第一次登入就綁定 User-Agent） ======
+# 每個帳號允許綁定的裝置數量
+DEVICE_LIMITS = {
+    "a0981026530": 9999,  # 不限裝置
+    "user1": 1,
+    "user2": 1
+}
+
+# 裝置綁定紀錄 { "username": set([...user_agents...]) }
 DEVICE_BIND = {}
 
-def load_segments(path="history.txt"):
-    segments = []
-    with open(path, "r", encoding="utf-8") as f:
+# ---------------- 輔助函數 ----------------
+def load_segments():
+    with open("history.txt", "r", encoding="utf-8") as f:
         raw = f.read()
     raw_segments = re.split(r"[【】#\n\r]+", raw)
+    segments = []
     for seg in raw_segments:
         digits = [int(x) for x in seg if x in "123456"]
         if digits:
             segments.append(digits)
     return segments
 
-segments = load_segments()
-
 def find_next_digit_counts(segments, pattern):
+    if not re.fullmatch(r"[1-6]+", pattern):
+        return [0]*6, 0
     pat = [int(c) for c in pattern]
     L = len(pat)
-    counts = [0] * 6
+    counts = [0]*6
     for seg in segments:
-        for i in range(len(seg) - L):
+        for i in range(len(seg)-L):
             if seg[i:i+L] == pat:
                 counts[seg[i+L]-1] += 1
     return counts, sum(counts)
 
-# ====== 登入頁面 ======
+# ---------------- 登入驗證 ----------------
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form.get("username", "")
-        password = request.form.get("password", "")
+        username = request.form["username"]
+        password = request.form["password"]
         user_agent = request.headers.get("User-Agent", "unknown")
 
         if username in USERS and USERS[username] == password:
-            # 檢查是否已綁定裝置
-            if username in DEVICE_BIND:
-                if DEVICE_BIND[username] != user_agent:
-                    return render_template_string("""
-                    <h2>登入失敗：此帳號已綁定其他裝置</h2>
-                    <a href="/login">再試一次</a>
-                    """)
-            else:
-                # 第一次登入 → 綁定裝置
-                DEVICE_BIND[username] = user_agent
+            # 如果不限裝置，直接登入
+            if DEVICE_LIMITS.get(username, 1) >= 9999:
+                session["username"] = username
+                return redirect(url_for("index"))
 
-            session["user"] = username
+            # 檢查裝置綁定數量
+            if username not in DEVICE_BIND:
+                DEVICE_BIND[username] = {user_agent}
+            else:
+                if user_agent not in DEVICE_BIND[username]:
+                    if len(DEVICE_BIND[username]) >= DEVICE_LIMITS.get(username, 1):
+                        return "登入失敗：此帳號已綁定裝置，不能再登入"
+                    DEVICE_BIND[username].add(user_agent)
+
+            session["username"] = username
             return redirect(url_for("index"))
         else:
-            return render_template_string("""
-            <h2>登入失敗，請加line:19931026a，購買</h2>
-            <a href="/login">再試一次</a>
-            """)
-    return render_template_string("""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <title>登入</title>
-        <style>
-            body { font-family: Arial; padding: 20px; font-size: 20px; }
-            input, button { padding: 10px; font-size: 20px; margin: 5px 0; }
-        </style>
-    </head>
-    <body>
-        <h2>請登入</h2>
-        <form method="POST">
-            <input name="username" placeholder="帳號"><br>
-            <input name="password" placeholder="密碼" type="password"><br>
-            <button type="submit">登入</button>
+            return "帳號或密碼錯誤"
+
+    return '''
+        <form method="post">
+            <h2>登入</h2>
+            帳號: <input type="text" name="username"><br>
+            密碼: <input type="password" name="password"><br>
+            <input type="submit" value="登入">
         </form>
-    </body>
-    </html>
-    """)
-
-# ====== 主頁（需要登入才能用） ======
-@app.route("/")
-def index():
-    if "user" not in session:
-        return redirect(url_for("login"))
-
-    return render_template_string(""" 
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta charset="utf-8">
-    <title>感謝您的選購，如需要本金分配請私訊line(僅限直播1使用)</title>
-    <style>
-    body { font-family: Arial, sans-serif; padding: 10px; font-size: 22px; }
-    input, button { padding: 12px; font-size: 22px; margin: 6px 0; }
-    h1 { font-size: 28px; }
-    h2 { font-size: 26px; margin-top: 20px; }
-    h3 { font-size: 22px; margin: 10px 0; }
-    table { border-collapse: collapse; margin: 10px 0; width: 100%; max-width: 320px; font-size: 20px; }
-    th, td { border: 2px solid #333; padding: 8px; text-align: center; }
-    .highlight { font-weight: bold; font-size: 22px; color: blue; }
-    .diff-box { border: 3px solid red; padding: 8px; margin: 10px 0; font-weight: bold; font-size: 22px; }
-    #tables { display: flex; gap: 15px; flex-wrap: wrap; }
-    #tables > div { flex: 1; min-width: 250px; }
-    </style>
-    </head>
-    <body>
-    <h1>感謝您的選購，如需要本金分配請私訊line(僅限直播1使用)</h1>
-    <p>使用者：{{user}}</p>
-    <a href="/logout">登出</a><br><br>
-
-    <input id="pattern" placeholder="請輸入號碼">
-    <button onclick="analyze()">查詢</button>
-
-    <div id="summary"></div>
-    <div id="compare"></div>
-    <div id="tables"></div>
-
-    <script>
-    let records = [];
-    let roundTables = [];
-
-    async function analyze(){
-      const pattern = document.getElementById("pattern").value.trim();
-      if(!/^[1-6]+$/.test(pattern)){
-        alert("只能輸入 1-6 的數字");
-        return;
-      }
-
-      if(records.length === 3){
-        records = [];
-        roundTables = [];
-        document.getElementById("summary").innerHTML = "";
-        document.getElementById("compare").innerHTML = "";
-        document.getElementById("tables").innerHTML = "";
-      }
-
-      const res = await fetch("/analyze",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({pattern})
-      });
-      const data = await res.json();
-
-      records.push(data);
-
-      let tblHtml = `
-        <div>
-          <h3>${pattern} 查詢結果</h3>
-          <table><tr><th>數字</th><th>次數</th><th>機率</th></tr>
-          ${data.rows.map(r=>`<tr><td>${r.num}</td><td>${r.cnt}</td><td>${r.prob}</td></tr>`).join("")}
-          </table>
-        </div>
-      `;
-      roundTables.push(tblHtml);
-      document.getElementById("tables").innerHTML = roundTables.join("");
-
-      if(records.length === 3){
-        renderCompareTable();
-      }
-    }
-
-    function renderCompareTable(){
-      let sumCounts = [0,0,0,0,0,0];
-      records.forEach(r=>{
-        r.counts.forEach((c,i)=>sumCounts[i]+=c);
-      });
-      let total = sumCounts.reduce((a,b)=>a+b,0);
-      let arr = sumCounts.map((c,i)=>({num:i+1, cnt:c, prob: total? (c/total):0}));
-      arr.sort((a,b)=>b.cnt-a.cnt);
-
-      const top3 = arr.slice(0,3);
-      let top3Text = top3.map(o=>`${o.num} (${o.cnt}次)`).join(", ");
-
-      let odd=0,even=0,small=0,big=0;
-      sumCounts.forEach((c,i)=>{
-        const num=i+1;
-        if ([1,3,5].includes(num)) odd+=c;
-        if ([2,4,6].includes(num)) even+=c;
-        if ([1,2,3].includes(num)) small+=c;
-        if ([4,5,6].includes(num)) big+=c;
-      });
-      const diffOddEven = odd>even?`單比雙多 ${odd-even} 次`:even>odd?`雙比單多 ${even-odd} 次`:"單雙一樣多";
-      const diffBigSmall = big>small?`大比小多 ${big-small} 次`:small>big?`小比大多 ${small-big} 次`:"大小一樣多";
-
-      document.getElementById("summary").innerHTML = `
-        <h2>加總結果摘要</h2>
-        <p class="highlight">前三名：${top3Text}</p>
-        <div class="diff-box">單 ${odd}，雙 ${even} → ${diffOddEven}</div>
-        <div class="diff-box">大 ${big}，小 ${small} → ${diffBigSmall}</div>
-      `;
-
-      document.getElementById("compare").innerHTML = `
-        <h2>三組加總對比表</h2>
-        <table><tr><th>數字</th><th>次數</th><th>機率</th></tr>
-        ${arr.map(o=>`<tr><td>${o.num}</td><td>${o.cnt}</td><td>${(o.prob*100).toFixed(0)}%</td></tr>`).join("")}
-        </table>
-      `;
-    }
-    </script>
-    </body>
-    </html>
-    """, user=session["user"])
+    '''
 
 @app.route("/logout")
 def logout():
-    session.pop("user", None)
+    session.pop("username", None)
     return redirect(url_for("login"))
 
-@app.route("/analyze", methods=["POST"])
-def analyze():
+# ---------------- 主頁 ----------------
+@app.route("/")
+def index():
+    if "username" not in session:
+        return redirect(url_for("login"))
+
+    return render_template_string(PAGE_HTML)
+
+# ---------------- 查詢 API ----------------
+@app.route("/api/search", methods=["POST"])
+def search():
+    if "username" not in session:
+        return jsonify({"error": "未登入"})
+
     data = request.get_json()
-    pattern = data.get("pattern","")
-    counts, total = find_next_digit_counts(segments, pattern)
-    rows = []
-    for i,c in enumerate(counts):
-        prob = f"{(c/total*100):.0f}%" if total else "0%"
-        rows.append({"num":i+1, "cnt":c, "prob":prob})
-    return jsonify({"counts":counts, "rows":rows})
+    patterns = data.get("patterns", [])
+
+    segments = load_segments()
+
+    results = {}
+    combined_counts = [0]*6
+    combined_total = 0
+
+    for p in patterns:
+        counts, total = find_next_digit_counts(segments, p)
+        results[p] = {"counts": counts, "total": total}
+        combined_counts = [c1+c2 for c1, c2 in zip(combined_counts, counts)]
+        combined_total += total
+
+    # 加總後的前三名
+    top3 = sorted(
+        [(i+1, c) for i, c in enumerate(combined_counts)],
+        key=lambda x: x[1], reverse=True
+    )[:3]
+
+    # 單雙大小
+    odd_cnt = combined_counts[0] + combined_counts[2] + combined_counts[4]
+    even_cnt = combined_counts[1] + combined_counts[3] + combined_counts[5]
+    small_cnt = combined_counts[0] + combined_counts[1] + combined_counts[2]
+    big_cnt = combined_counts[3] + combined_counts[4] + combined_counts[5]
+
+    summary = {
+        "top3": top3,
+        "odd": odd_cnt, "even": even_cnt,
+        "small": small_cnt, "big": big_cnt
+    }
+
+    return jsonify({"results": results, "summary": summary})
+
+# ---------------- HTML ----------------
+PAGE_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>數字分析工具</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; font-size: 22px; }
+        h2 { margin-top: 0; }
+        .results { margin-top: 20px; }
+        .summary { border: 2px solid black; padding: 10px; margin-bottom: 20px; }
+        .highlight { font-weight: bold; color: red; font-size: 26px; }
+    </style>
+</head>
+<body>
+    <h2>數字分析工具</h2>
+    <form id="searchForm">
+        輸入6碼: <input type="text" id="pattern6"><br><br>
+        輸入5碼: <input type="text" id="pattern5"><br><br>
+        輸入4碼: <input type="text" id="pattern4"><br><br>
+        <button type="submit">查詢</button>
+    </form>
+
+    <div id="summary" class="summary"></div>
+    <div class="results" id="results"></div>
+
+    <p><a href="/logout">登出</a></p>
+
+    <script>
+        document.getElementById("searchForm").addEventListener("submit", async function(e) {
+            e.preventDefault();
+            let p6 = document.getElementById("pattern6").value.trim();
+            let p5 = document.getElementById("pattern5").value.trim();
+            let p4 = document.getElementById("pattern4").value.trim();
+
+            let patterns = [];
+            if (p6) patterns.push(p6);
+            if (p5) patterns.push(p5);
+            if (p4) patterns.push(p4);
+
+            if (patterns.length === 0) {
+                alert("請至少輸入一組數字");
+                return;
+            }
+
+            let res = await fetch("/api/search", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({patterns: patterns})
+            });
+            let data = await res.json();
+
+            let summaryDiv = document.getElementById("summary");
+            let html = "<h3>加總結果</h3>";
+            html += "<p>前三名: " + data.summary.top3.map(x => `<span class='highlight'>${x[0]} (${x[1]})</span>`).join(" , ") + "</p>";
+            html += `<p>單: <span class='highlight'>${data.summary.odd}</span> , 雙: <span class='highlight'>${data.summary.even}</span></p>`;
+            html += `<p>大: <span class='highlight'>${data.summary.big}</span> , 小: <span class='highlight'>${data.summary.small}</span></p>`;
+            summaryDiv.innerHTML = html;
+
+            // 顯示各組查詢結果
+            let resultsDiv = document.getElementById("results");
+            resultsDiv.innerHTML = "";
+            for (let p in data.results) {
+                let r = data.results[p];
+                let row = `<div><b>${p}</b> → 次數: ${r.counts.join(", ")} (總計: ${r.total})</div>`;
+                resultsDiv.innerHTML += row;
+            }
+
+            // 查詢完後清除輸入框
+            document.getElementById("pattern6").value = "";
+            document.getElementById("pattern5").value = "";
+            document.getElementById("pattern4").value = "";
+        });
+    </script>
+</body>
+</html>
+"""
 
 if __name__ == "__main__":
     app.run(debug=True)
