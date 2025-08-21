@@ -4,12 +4,19 @@ import re
 app = Flask(__name__)
 app.secret_key = "mysecretkey"  # 換成你自己的隨機字串，保護 Session
 
-# ====== 帳號密碼設定 ======
+# ---------------- 帳號密碼設定 ----------------
 USERS = {
     "a0981026530": "Aa0981026530",
-    "user2": "pass2",
-    "admin": "123456"
+    "user1": "pass1",
+    "user2": "pass2"
 }
+
+DEVICE_LIMITS = {
+    "a0981026530": 9999,  # 不限裝置
+    "user1": 1,
+    "user2": 1
+}
+DEVICE_BIND = {}
 
 def load_segments(path="history.txt"):
     segments = []
@@ -60,7 +67,7 @@ def login():
         </style>
     </head>
     <body>
-        <h2>請登入</h2>
+        <h2>參考數據下注，單月只要999(綁訂一個裝置)如需要本金分配歡迎找我【line:19931026a】</h2>
         <form method="POST">
             <input name="username" placeholder="帳號"><br>
             <input name="password" placeholder="密碼" type="password"><br>
