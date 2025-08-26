@@ -98,7 +98,7 @@ def index():
     h1 { font-size: 28px; }
     h2 { font-size: 24px; margin-top: 20px; }
     h3 { font-size: 22px; margin: 10px 0; }
-    table { border-collapse: collapse; margin: 10px 0; width: 100%; max-width: 340px; font-size: 18px; }
+    table { border-collapse: collapse; margin: 10px 0; width: 100%; max-width: 360px; font-size: 18px; }
     th, td { border: 2px solid #333; padding: 8px; text-align: center; }
     .highlight { font-weight: bold; font-size: 22px; color: blue; }
     .diff-box { border: 3px solid red; padding: 8px; margin: 10px 0; font-weight: bold; font-size: 20px; }
@@ -111,7 +111,7 @@ def index():
     <p>使用者：{{user}}</p>
     <a href="/logout">登出</a><br><br>
 
-    <input id="pattern" placeholder="請輸入最後6個號碼（會自動抓5碼）或單獨輸入5個號碼">
+    <input id="pattern" placeholder="請輸入最後6碼（自動抓 5碼與4碼），或輸入5碼（自動抓4碼），或輸入4碼">
     <button onclick="analyze()">查詢</button>
 
     <div id="summary"></div>
@@ -130,6 +130,18 @@ def index():
       document.getElementById("tables").innerHTML = "";
     }
 
+    function buildPatterns(raw){
+      // 僅允許 4~6 碼；其餘長度直接使用原值
+      if(raw.length === 6){
+        return [raw, raw.slice(1), raw.slice(2)]; // 6, 5, 4
+      }else if(raw.length === 5){
+        return [raw, raw.slice(1)];               // 5, 4
+      }else if(raw.length === 4){
+        return [raw];                              // 4
+      }
+      return [raw];
+    }
+
     async function analyze(){
       const raw = document.getElementById("pattern").value.trim();
       if(!/^[1-6]+$/.test(raw)){
@@ -137,13 +149,12 @@ def index():
         return;
       }
 
-      // 單輪最多兩組（6碼與對應的5碼，或僅5碼）
-      if(records.length >= 2){
+      const patterns = buildPatterns(raw);
+
+      // 若加上本次 patterns 會超過 3 組，先清空上一輪
+      if(records.length + patterns.length > 3){
         resetAll();
       }
-
-      // 若輸入 6 碼，系統自動再抓 5 碼（去掉第一碼）
-      const patterns = (raw.length === 6) ? [raw, raw.slice(1)] : [raw];
 
       for(const pattern of patterns){
         const res = await fetch("/analyze",{
@@ -167,7 +178,7 @@ def index():
         document.getElementById("tables").innerHTML = roundTables.join("");
       }
 
-      if(records.length >= 2){
+      if(records.length > 0){
         renderCompareTable();
       }
     }
@@ -195,6 +206,7 @@ def index():
       const diffOddEven = odd>even?`單比雙多 ${odd-even} 次`:even>odd?`雙比單多 ${even-odd} 次`:"單雙一樣多";
       const diffBigSmall = big>small?`大比小多 ${big-small} 次`:small>big?`小比大多 ${small-big} 次`:"大小一樣多";
 
+      const groupCount = records.length;
       document.getElementById("summary").innerHTML = `
         <h2>加總結果摘要</h2>
         <p class="highlight">前三名：${top3Text}</p>
@@ -203,7 +215,7 @@ def index():
       `;
 
       document.getElementById("compare").innerHTML = `
-        <h2>兩組加總對比表</h2>
+        <h2>${groupCount} 組加總對比表</h2>
         <table><tr><th>數字</th><th>次數</th><th>機率</th></tr>
         ${arr.map(o=>`<tr><td>${o.num}</td><td>${o.cnt}</td><td>${(o.prob*100).toFixed(0)}%</td></tr>`).join("")}
         </table>
