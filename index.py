@@ -20,8 +20,11 @@ DEVICE_BIND = {}
 
 def load_segments(path="history.txt"):
     segments = []
-    with open(path, "r", encoding="utf-8") as f:
-        raw = f.read()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw = f.read()
+    except FileNotFoundError:
+        raw = ""
     raw_segments = re.split(r"[【】#\n\r]+", raw)
     for seg in raw_segments:
         digits = [int(x) for x in seg if x in "123456"]
@@ -95,12 +98,12 @@ def index():
     h1 { font-size: 28px; }
     h2 { font-size: 24px; margin-top: 20px; }
     h3 { font-size: 22px; margin: 10px 0; }
-    table { border-collapse: collapse; margin: 10px 0; width: 100%; max-width: 300px; font-size: 18px; }
+    table { border-collapse: collapse; margin: 10px 0; width: 100%; max-width: 340px; font-size: 18px; }
     th, td { border: 2px solid #333; padding: 8px; text-align: center; }
     .highlight { font-weight: bold; font-size: 22px; color: blue; }
     .diff-box { border: 3px solid red; padding: 8px; margin: 10px 0; font-weight: bold; font-size: 20px; }
     #tables { display: flex; gap: 15px; flex-wrap: wrap; }
-    #tables > div { flex: 1; min-width: 250px; }
+    #tables > div { flex: 1; min-width: 260px; }
     </style>
     </head>
     <body>
@@ -108,7 +111,7 @@ def index():
     <p>使用者：{{user}}</p>
     <a href="/logout">登出</a><br><br>
 
-    <input id="pattern" placeholder="請輸入最後6個號碼+5個號碼+4個號碼">
+    <input id="pattern" placeholder="請輸入最後6個號碼（會自動抓5碼）或單獨輸入5個號碼">
     <button onclick="analyze()">查詢</button>
 
     <div id="summary"></div>
@@ -119,42 +122,52 @@ def index():
     let records = [];
     let roundTables = [];
 
+    function resetAll(){
+      records = [];
+      roundTables = [];
+      document.getElementById("summary").innerHTML = "";
+      document.getElementById("compare").innerHTML = "";
+      document.getElementById("tables").innerHTML = "";
+    }
+
     async function analyze(){
-      const pattern = document.getElementById("pattern").value.trim();
-      if(!/^[1-6]+$/.test(pattern)){
+      const raw = document.getElementById("pattern").value.trim();
+      if(!/^[1-6]+$/.test(raw)){
         alert("只能輸入 1-6 的數字");
         return;
       }
 
-      if(records.length === 3){
-        records = [];
-        roundTables = [];
-        document.getElementById("summary").innerHTML = "";
-        document.getElementById("compare").innerHTML = "";
-        document.getElementById("tables").innerHTML = "";
+      // 單輪最多兩組（6碼與對應的5碼，或僅5碼）
+      if(records.length >= 2){
+        resetAll();
       }
 
-      const res = await fetch("/analyze",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({pattern})
-      });
-      const data = await res.json();
+      // 若輸入 6 碼，系統自動再抓 5 碼（去掉第一碼）
+      const patterns = (raw.length === 6) ? [raw, raw.slice(1)] : [raw];
 
-      records.push(data);
+      for(const pattern of patterns){
+        const res = await fetch("/analyze",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({pattern})
+        });
+        const data = await res.json();
 
-      let tblHtml = `
-        <div>
-          <h3>${pattern} 查詢結果</h3>
-          <table><tr><th>數字</th><th>次數</th><th>機率</th></tr>
-          ${data.rows.map(r=>`<tr><td>${r.num}</td><td>${r.cnt}</td><td>${r.prob}</td></tr>`).join("")}
-          </table>
-        </div>
-      `;
-      roundTables.push(tblHtml);
-      document.getElementById("tables").innerHTML = roundTables.join("");
+        records.push(data);
 
-      if(records.length === 3){
+        let tblHtml = `
+          <div>
+            <h3>${pattern} 查詢結果</h3>
+            <table><tr><th>數字</th><th>次數</th><th>機率</th></tr>
+            ${data.rows.map(r=>`<tr><td>${r.num}</td><td>${r.cnt}</td><td>${r.prob}</td></tr>`).join("")}
+            </table>
+          </div>
+        `;
+        roundTables.push(tblHtml);
+        document.getElementById("tables").innerHTML = roundTables.join("");
+      }
+
+      if(records.length >= 2){
         renderCompareTable();
       }
     }
@@ -190,7 +203,7 @@ def index():
       `;
 
       document.getElementById("compare").innerHTML = `
-        <h2>三組加總對比表</h2>
+        <h2>兩組加總對比表</h2>
         <table><tr><th>數字</th><th>次數</th><th>機率</th></tr>
         ${arr.map(o=>`<tr><td>${o.num}</td><td>${o.cnt}</td><td>${(o.prob*100).toFixed(0)}%</td></tr>`).join("")}
         </table>
