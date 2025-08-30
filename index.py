@@ -98,7 +98,7 @@ def index():
     h1 { font-size: 28px; }
     h2 { font-size: 24px; margin-top: 20px; }
     h3 { font-size: 22px; margin: 10px 0; }
-    table { border-collapse: collapse; margin: 10px 0; width: 100%; max-width: 360px; font-size: 18px; }
+    table { border-collapse: collapse; margin: 10px 0; width: 100%; max-width: 380px; font-size: 18px; }
     th, td { border: 2px solid #333; padding: 8px; text-align: center; }
     .highlight { font-weight: bold; font-size: 22px; color: blue; }
     .diff-box { border: 3px solid red; padding: 8px; margin: 10px 0; font-weight: bold; font-size: 20px; }
@@ -111,7 +111,7 @@ def index():
     <p>使用者：{{user}}</p>
     <a href="/logout">登出</a><br><br>
 
-    <input id="pattern" placeholder="請輸入最後6碼（自動抓 5碼與4碼），或輸入5碼（自動抓4碼），或輸入4碼">
+    <input id="pattern" placeholder="輸入6碼將自動帶出5/4/3碼；輸入5碼自動帶出4/3碼；輸入4碼自動帶出3碼；也可直接輸入3碼">
     <button onclick="analyze()">查詢</button>
 
     <div id="summary"></div>
@@ -131,14 +131,17 @@ def index():
     }
 
     function buildPatterns(raw){
-      // 僅允許 4~6 碼；其餘長度直接使用原值
+      // 只對 6/5/4/3 碼做連續去頭擴展
       if(raw.length === 6){
-        return [raw, raw.slice(1), raw.slice(2)]; // 6, 5, 4
+        return [raw, raw.slice(1), raw.slice(2), raw.slice(3)]; // 6,5,4,3
       }else if(raw.length === 5){
-        return [raw, raw.slice(1)];               // 5, 4
+        return [raw, raw.slice(1), raw.slice(2)];               // 5,4,3
       }else if(raw.length === 4){
-        return [raw];                              // 4
+        return [raw, raw.slice(1)];                             // 4,3
+      }else if(raw.length === 3){
+        return [raw];                                           // 3
       }
+      // 其他長度就原樣回傳（但通常不應該）
       return [raw];
     }
 
@@ -151,8 +154,8 @@ def index():
 
       const patterns = buildPatterns(raw);
 
-      // 若加上本次 patterns 會超過 3 組，先清空上一輪
-      if(records.length + patterns.length > 3){
+      // 若加入本次 patterns 後超過 4 組，重置新一輪
+      if(records.length + patterns.length > 4){
         resetAll();
       }
 
